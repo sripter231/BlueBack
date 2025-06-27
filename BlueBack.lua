@@ -1,3 +1,7 @@
+-- Universal Roblox Script with Kavo UI (Ultimate Edition V5)
+-- Features: Original ESP, Silent Aim, Trigger Bot, Wallbang, Bunny Hop, FOV Changer, Instant Respawn, Fake Lag, Speed Hack, Noclip, Infinite Jump, Teleport, Auto-Detect, God Mode, Kill Aura, X-Ray, Fullbright, Player Chams, Auto Respawn, Anti-AFK, Gravity Hack, No Fall Damage, Item ESP, Click TP, Super Jump, Auto Clicker, Player Tracker, No Clip Speed Boost, Wallwalk, Feature Search, F3X, Nameless Admin, No Spread, Rapid Fire, Invisible Tools, Fake Character, Bullet Tracers, Auto Reload, Hitbox Expander, Break In Script, Break In 2 Script, Aimbot
+-- Added: Break In Script, Break In 2 Script, Aimbot buttons in Scripts tab
+-- Note: Use at your own risk. Anticheat bypass is not guaranteed.
 
 local Library = loadstring(game:HttpGet("https://raw.githubusercontent.com/xHeptc/Kavo-UI-Library/main/source.lua"))()
 local Window = Library.CreateLib("BlueBack", "DarkTheme")
@@ -8,7 +12,7 @@ local HttpService = game:GetService("HttpService")
 local UserInputService = game:GetService("UserInputService")
 local Camera = workspace.CurrentCamera
 
--- Strong Anticheat Bypass
+-- Enhanced Anticheat Bypass
 local function antiCheatBypass()
     pcall(function()
         if getgenv().ACBYPASS then return end
@@ -20,6 +24,7 @@ local function antiCheatBypass()
                 humanoid.WalkSpeed = math.clamp(humanoid.WalkSpeed, 16, 100)
                 humanoid.JumpPower = math.clamp(humanoid.JumpPower, 50, 100)
                 humanoid.HipHeight = math.clamp(humanoid.HipHeight, 0, 10)
+                humanoid.Health = math.clamp(humanoid.Health, 0, 100)
             end
         end
         
@@ -35,14 +40,18 @@ local function antiCheatBypass()
         end
         
         mt.__namecall = function(t, k, ...)
-            if k == "Kick" or k == "Ban" or k == "RemoteEvent" then
+            if k == "Kick" or k == "Ban" or k == "RemoteEvent" or k == "RemoteFunction" then
+                return
+            end
+            local args = {...}
+            if k == "FireServer" and args[1] == "Check" then
                 return
             end
             return oldNamecall(t, k, ...)
         end
         
         mt.__newindex = function(t, k, v)
-            if k == "WalkSpeed" or k == "JumpPower" then
+            if k == "WalkSpeed" or k == "JumpPower" or k == "CFrame" then
                 return
             end
             oldNewIndex(t, k, v)
@@ -53,7 +62,21 @@ local function antiCheatBypass()
         spawn(function()
             while getgenv().ACBYPASS do
                 spoofProperties()
-                wait(0.5)
+                pcall(function()
+                    for _, conn in pairs(getconnections(game:GetService("ReplicatedStorage"):FindFirstChildOfClass("RemoteEvent").OnClientEvent)) do
+                        conn:Disable()
+                    end
+                end)
+                wait(math.random(0.3, 0.7))
+            end
+        end)
+        
+        spawn(function()
+            while getgenv().ACBYPASS do
+                pcall(function()
+                    LocalPlayer.Character.HumanoidRootPart.Velocity = Vector3.new(math.random(-10, 10), 0, math.random(-10, 10))
+                end)
+                wait(1)
             end
         end)
     end)
@@ -63,6 +86,7 @@ antiCheatBypass()
 -- Original ESP (Smaller Health/Distance Text)
 local espEnabled = false
 local espTable = {}
+local espTeamCheck = false
 local function createESP(player)
     if player == LocalPlayer or not player.Character or not player.Character:FindFirstChild("Head") then return end
     
@@ -78,35 +102,35 @@ local function createESP(player)
     nameLabel.Size = UDim2.new(1, 0, 0.3, 0)
     nameLabel.BackgroundTransparency = 1
     nameLabel.Text = player.Name
-    nameLabel.TextColor3 = Color3.new(1, 1, 1)
+    nameLabel.TextColor3 = espTeamCheck and (player.Team == LocalPlayer.Team and Color3.new(0, 1, 0) or Color3.new(1, 0, 0)) or Color3.new(1, 1, 1)
     nameLabel.TextStrokeTransparency = 0
     nameLabel.TextScaled = true
     nameLabel.Parent = billboard
 
     local healthLabel = Instance.new("TextLabel")
-    healthLabel.Size = UDim2.new(1, 0, 0.2, 0) -- Smaller size
+    healthLabel.Size = UDim2.new(1, 0, 0.2, 0)
     healthLabel.Position = UDim2.new(0, 0, 0.3, 0)
     healthLabel.BackgroundTransparency = 1
     healthLabel.Text = "Health: 100"
     healthLabel.TextColor3 = Color3.new(0, 1, 0)
     healthLabel.TextStrokeTransparency = 0
-    healthLabel.TextSize = 12 -- Fixed smaller size
+    healthLabel.TextSize = 12
     healthLabel.Parent = billboard
 
     local distanceLabel = Instance.new("TextLabel")
-    distanceLabel.Size = UDim2.new(1, 0, 0.2, 0) -- Smaller size
+    distanceLabel.Size = UDim2.new(1, 0, 0.2, 0)
     distanceLabel.Position = UDim2.new(0, 0, 0.5, 0)
     distanceLabel.BackgroundTransparency = 1
     distanceLabel.Text = "Distance: 0"
     distanceLabel.TextColor3 = Color3.new(1, 1, 0)
     distanceLabel.TextStrokeTransparency = 0
-    distanceLabel.TextSize = 12 -- Fixed smaller size
+    distanceLabel.TextSize = 12
     distanceLabel.Parent = billboard
 
     local highlight = Instance.new("Highlight")
     highlight.Adornee = player.Character
     highlight.FillTransparency = 0.5
-    highlight.OutlineColor = Color3.new(1, 0, 0)
+    highlight.OutlineColor = espTeamCheck and (player.Team == LocalPlayer.Team and Color3.new(0, 1, 0) or Color3.new(1, 0, 0)) or Color3.new(1, 0, 0)
     highlight.Parent = player.Character
 
     espTable[player] = {billboard = billboard, healthLabel = healthLabel, distanceLabel = distanceLabel, highlight = highlight}
@@ -122,6 +146,10 @@ local function updateESP()
                 data.healthLabel.TextColor3 = Color3.fromHSV(hum.Health/300, 1, 1)
                 data.distanceLabel.Text = "Distance: " .. math.floor(distance)
                 data.highlight.FillColor = Color3.fromHSV(hum.Health/300, 1, 1)
+                if espTeamCheck then
+                    data.nameLabel.TextColor3 = player.Team == LocalPlayer.Team and Color3.new(0, 1, 0) or Color3.new(1, 0, 0)
+                    data.highlight.OutlineColor = player.Team == LocalPlayer.Team and Color3.new(0, 1, 0) or Color3.new(1, 0, 0)
+                end
             else
                 data.billboard:Destroy()
                 data.highlight:Destroy()
@@ -269,7 +297,7 @@ end
 -- Wallbang
 local wallbangEnabled = false
 local function wallbang()
-    -- Game-specific, no universal solution
+    -- Game-specific
 end
 
 -- Bunny Hop
@@ -295,34 +323,6 @@ end
 -- FOV Changer
 local function setFOV(value)
     Camera.FieldOfView = value
-end
-
--- Third Person
-local thirdPersonEnabled = false
-local function toggleThirdPerson(state)
-    thirdPersonEnabled = state
-    if state then
-        UserInputService.MouseBehavior = Enum.MouseBehavior.LockCenter
-        Camera.CameraType = Enum.CameraType.Scriptable
-        RunService.RenderStepped:Connect(function()
-            if thirdPersonEnabled then
-                local character = LocalPlayer.Character
-                if character and character:FindFirstChild("HumanoidRootPart") then
-                    local root = character.HumanoidRootPart
-                    Camera.CFrame = CFrame.new(root.Position - root.CFrame.LookVector * 5 + Vector3.new(0, 2, 0), root.Position)
-                end
-            end
-        end)
-    else
-        Camera.CameraType = Enum.CameraType.Custom
-        UserInputService.MouseBehavior = Enum.MouseBehavior.Default
-    end
-end
-
--- No Recoil
-local noRecoilEnabled = false
-local function noRecoil()
-    -- Game-specific, no universal solution
 end
 
 -- Instant Respawn
@@ -679,22 +679,210 @@ end
 -- Wallwalk
 local wallwalkEnabled = false
 local function wallwalk()
+    local bodyVelocity = Instance.new("BodyVelocity")
+    bodyVelocity.MaxForce = Vector3.new(math.huge, math.huge, math.huge)
+    bodyVelocity.Parent = LocalPlayer.Character.HumanoidRootPart
+
     RunService.Stepped:Connect(function()
-        if wallwalkEnabled and LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart") then
-            local root = LocalPlayer.Character.HumanoidRootPart
-            local ray = Ray.new(root.Position, root.CFrame.LookVector * 5)
-            local hit, pos, normal = workspace:FindPartOnRay(ray, LocalPlayer.Character)
-            if hit then
-                root.CFrame = CFrame.new(root.Position, root.Position + normal) * CFrame.Angles(math.rad(-90), 0, 0)
-            end
+        if not wallwalkEnabled or not LocalPlayer.Character or not LocalPlayer.Character:FindFirstChild("HumanoidRootPart") then
+            bodyVelocity:Destroy()
+            return
+        end
+        local root = LocalPlayer.Character.HumanoidRootPart
+        local ray = Ray.new(root.Position, -root.CFrame.UpVector * 5)
+        local hit, pos, normal = workspace:FindPartOnRay(ray, LocalPlayer.Character)
+        if hit then
+            bodyVelocity.Velocity = Vector3.new(0, 0, 0)
+            root.CFrame = CFrame.new(root.Position, root.Position + normal) * CFrame.Angles(math.rad(-90), 0, 0)
+        else
+            bodyVelocity.Velocity = LocalPlayer.Character.Humanoid.MoveDirection * 16
         end
     end)
+end
+
+local function toggleWallwalk(state)
+    wallwalkEnabled = state
+    if state then
+        wallwalk()
+    else
+        if LocalPlayer.Character and LocalPlayer.Character.HumanoidRootPart then
+            for _, v in pairs(LocalPlayer.Character.HumanoidRootPart:GetChildren()) do
+                if v:IsA("BodyVelocity") then
+                    v:Destroy()
+                end
+            end
+        end
+    end
+end
+
+-- No Spread
+local noSpreadEnabled = false
+local function noSpread()
+    -- Game-specific
+end
+
+-- Rapid Fire
+local rapidFireEnabled = false
+local function rapidFire()
+    spawn(function()
+        while rapidFireEnabled do
+            if LocalPlayer.Character and LocalPlayer.Character:FindFirstChildOfClass("Tool") then
+                local tool = LocalPlayer.Character:FindFirstChildOfClass("Tool")
+                tool:Activate()
+            end
+            wait(0.01)
+        end
+    end)
+end
+
+-- Invisible Tools
+local invisibleToolsEnabled = false
+local function invisibleTools()
+    for _, tool in pairs(LocalPlayer.Backpack:GetChildren()) do
+        if tool:IsA("Tool") then
+            for _, part in pairs(tool:GetDescendants()) do
+                if part:IsA("BasePart") then
+                    part.Transparency = invisibleToolsEnabled and 1 or 0
+                end
+            end
+        end
+    end
+    if LocalPlayer.Character then
+        for _, tool in pairs(LocalPlayer.Character:GetChildren()) do
+            if tool:IsA("Tool") then
+                for _, part in pairs(tool:GetDescendants()) do
+                    if part:IsA("BasePart") then
+                        part.Transparency = invisibleToolsEnabled and 1 or 0
+                    end
+                end
+            end
+        end
+    end
+end
+
+-- Fake Character
+local fakeCharacterEnabled = false
+local function fakeCharacter()
+    if fakeCharacterEnabled and LocalPlayer.Character then
+        local clone = LocalPlayer.Character:Clone()
+        clone.Parent = workspace
+        clone.HumanoidRootPart.CFrame = LocalPlayer.Character.HumanoidRootPart.CFrame * CFrame.new(0, 0, 5)
+        clone.Humanoid.WalkSpeed = 0
+        spawn(function()
+            while fakeCharacterEnabled and clone.Parent do
+                clone.HumanoidRootPart.CFrame = LocalPlayer.Character.HumanoidRootPart.CFrame * CFrame.new(0, 0, 5)
+                wait(0.1)
+            end
+            clone:Destroy()
+        end)
+    end
+end
+
+-- Bullet Tracers
+local bulletTracersEnabled = false
+local bulletTracersTable = {}
+local function createBulletTracer(bullet)
+    if not bullet:IsA("BasePart") then return end
+    local tracer = Instance.new("LineHandleAdornment")
+    tracer.Adornee = bullet
+    tracer.Color3 = Color3.new(1, 0, 0)
+    tracer.Thickness = 2
+    tracer.Transparency = 0.3
+    tracer.Length = 100
+    tracer.Parent = bullet
+    bulletTracersTable[bullet] = tracer
+end
+
+local function updateBulletTracers()
+    while bulletTracersEnabled do
+        for bullet, tracer in pairs(bulletTracersTable) do
+            if not bullet.Parent then
+                tracer:Destroy()
+                bulletTracersTable[bullet] = nil
+            end
+        end
+        for _, bullet in pairs(workspace:GetDescendants()) do
+            if bullet.Name == "Bullet" and not bulletTracersTable[bullet] then
+                createBulletTracer(bullet)
+            end
+        end
+        wait(0.1)
+    end
+end
+
+local function toggleBulletTracers(state)
+    bulletTracersEnabled = state
+    if state then
+        spawn(updateBulletTracers)
+    else
+        for _, tracer in pairs(bulletTracersTable) do
+            tracer:Destroy()
+        end
+        bulletTracersTable = {}
+    end
+end
+
+-- Auto Reload
+local autoReloadEnabled = false
+local function autoReload()
+    spawn(function()
+        while autoReloadEnabled do
+            if LocalPlayer.Character and LocalPlayer.Character:FindFirstChildOfClass("Tool") then
+                local tool = LocalPlayer.Character:FindFirstChildOfClass("Tool")
+                if tool:FindFirstChild("Ammo") and tool.Ammo.Value == 0 then
+                    tool:FindFirstChildOfClass("RemoteEvent"):FireServer("Reload")
+                end
+            end
+            wait(0.5)
+        end
+    end)
+end
+
+-- Custom Hitbox Expander
+local hitboxExpanderEnabled = false
+local hitboxSize = 10
+local function hitboxExpander()
+    for _, player in pairs(Players:GetPlayers()) do
+        if player ~= LocalPlayer and player.Character and player.Character:FindFirstChild("Head") then
+            local head = player.Character.Head
+            head.Size = hitboxExpanderEnabled and Vector3.new(hitboxSize, hitboxSize, hitboxSize) or Vector3.new(2, 1, 1)
+            head.Transparency = hitboxExpanderEnabled and 0.7 or 0
+        end
+    end
 end
 
 -- F3X Integration
 local function loadF3X()
     pcall(function()
-        loadstring(game:HttpGet("https://raw.githubusercontent.com/GroggyDev/F3X-Building-Tools/master/source.lua"))()
+        loadstring(game:HttpGet("https://raw.githubusercontent.com/BadScripter/Scripts/master/F3X.lua", true))()
+    end)
+end
+
+-- Nameless Admin
+local function loadNamelessAdmin()
+    pcall(function()
+        loadstring(game:HttpGet("https://raw.githubusercontent.com/FilteringEnabled/Nameless/master/Main"))()
+    end)
+end
+
+-- Break In Script
+local function loadBreakInScript()
+    pcall(function()
+        loadstring(game:HttpGet("https://raw.githubusercontent.com/Nikita365/Break-In-Story-/main/Break%20In%20Story%20Hub"))()
+    end)
+end
+
+-- Break In 2 Script
+local function loadBreakIn2Script()
+    pcall(function()
+        loadstring(game:HttpGet("https://raw.githubusercontent.com/RScriptz/RobloxScripts/main/BreakIn2.lua"))()
+    end)
+end
+
+-- Aimbot Script
+local function loadAimbotScript()
+    pcall(function()
+        loadstring(game:HttpGet("https://raw.githubusercontent.com/Exunys/Aimbot-V3/main/src/Aimbot.lua"))()
     end)
 end
 
@@ -702,13 +890,12 @@ end
 local featureList = {
     {name = "Fly", toggle = function(state) flying = state; if state then startFly() else stopFly() end end},
     {name = "ESP", toggle = toggleESP},
+    {name = "Team Check ESP", toggle = function(state) espTeamCheck = state; toggleESP(false); toggleESP(true) end},
     {name = "Silent Aim", toggle = toggleSilentAim},
     {name = "Trigger Bot", toggle = toggleTriggerBot},
     {name = "Wallbang", toggle = function(state) wallbangEnabled = state; if state then wallbang() end end},
     {name = "Bunny Hop", toggle = toggleBunnyHop},
     {name = "Kill Aura", toggle = function(state) killAuraEnabled = state; if state then killAura() end end},
-    {name = "Third Person", toggle = toggleThirdPerson},
-    {name = "No Recoil", toggle = function(state) noRecoilEnabled = state; if state then noRecoil() end end},
     {name = "Instant Respawn", toggle = toggleInstantRespawn},
     {name = "Fake Lag", toggle = toggleFakeLag},
     {name = "Speed Hack", toggle = function(state) speedHackEnabled = state; speedHack() end},
@@ -728,7 +915,14 @@ local featureList = {
     {name = "Super Jump", toggle = function(state) superJumpEnabled = state; superJump() end},
     {name = "Auto Clicker", toggle = function(state) autoClickerEnabled = state; if state then autoClicker() end end},
     {name = "No Clip Speed Boost", toggle = function(state) noClipSpeedBoostEnabled = state; noClipSpeedBoost() end},
-    {name = "Wallwalk", toggle = function(state) wallwalkEnabled = state; if state then wallwalk() end end}
+    {name = "Wallwalk", toggle = toggleWallwalk},
+    {name = "No Spread", toggle = function(state) noSpreadEnabled = state; if state then noSpread() end end},
+    {name = "Rapid Fire", toggle = function(state) rapidFireEnabled = state; if state then rapidFire() end end},
+    {name = "Invisible Tools", toggle = function(state) invisibleToolsEnabled = state; invisibleTools() end},
+    {name = "Fake Character", toggle = function(state) fakeCharacterEnabled = state; if state then fakeCharacter() end end},
+    {name = "Bullet Tracers", toggle = toggleBulletTracers},
+    {name = "Auto Reload", toggle = function(state) autoReloadEnabled = state; if state then autoReload() end end},
+    {name = "Hitbox Expander", toggle = function(state) hitboxExpanderEnabled = state; hitboxExpander() end}
 }
 
 -- UI Setup
@@ -743,6 +937,18 @@ SearchSection:NewTextBox("Search Features", "Type to filter features", function(
             end)
         end
     end
+end)
+
+local ScriptsTab = Window:NewTab("Scripts")
+local ScriptsSection = ScriptsTab:NewSection("External Scripts")
+ScriptsSection:NewButton("Break In Script", "Load Break In Story Hub", function()
+    loadBreakInScript()
+end)
+ScriptsSection:NewButton("Break In 2 Script", "Load Break In 2 Script", function()
+    loadBreakIn2Script()
+end)
+ScriptsSection:NewButton("Aimbot", "Load Aimbot V3 Script", function()
+    loadAimbotScript()
 end)
 
 local MainTab = Window:NewTab("Main")
@@ -765,8 +971,14 @@ MainSection:NewToggle("ESP", "Toggle original ESP", function(state)
     toggleESP(state)
 end)
 
-MainSection:NewButton("Infinite Yield", "Load Infinite Yield admin script", function()
-    loadstring(game:HttpGet("https://raw.githubusercontent.com/EdgeIY/infiniteyield/master/source"))()
+MainSection:NewToggle("Team Check ESP", "Toggle team-based ESP colors", function(state)
+    espTeamCheck = state
+    toggleESP(false)
+    toggleESP(true)
+end)
+
+MainSection:NewButton("Nameless Admin", "Load Nameless Admin script", function()
+    loadNamelessAdmin()
 end)
 
 MainSection:NewButton("Load F3X", "Load F3X Building Tools", function()
@@ -803,23 +1015,43 @@ CombatSection:NewToggle("Kill Aura", "Toggle kill aura", function(state)
     end
 end)
 
+CombatSection:NewToggle("No Spread", "Toggle no spread (game specific)", function(state)
+    noSpreadEnabled = state
+    if state then
+        noSpread()
+    end
+end)
+
+CombatSection:NewToggle("Rapid Fire", "Toggle rapid fire", function(state)
+    rapidFireEnabled = state
+    if state then
+        rapidFire()
+    end
+end)
+
+CombatSection:NewToggle("Auto Reload", "Toggle auto reload", function(state)
+    autoReloadEnabled = state
+    if state then
+        autoReload()
+    end
+end)
+
+CombatSection:NewToggle("Hitbox Expander", "Toggle hitbox expander", function(state)
+    hitboxExpanderEnabled = state
+    hitboxExpander()
+end)
+
+CombatSection:NewSlider("Hitbox Size", "Adjust hitbox size", 20, 5, function(value)
+    hitboxSize = value
+    hitboxExpander()
+end)
+
 -- Visuals Tab
 local VisualsTab = Window:NewTab("Visuals")
 local VisualsSection = VisualsTab:NewSection("Visual Features")
 
 VisualsSection:NewSlider("FOV", "Adjust field of view", 120, 70, function(value)
     setFOV(value)
-end)
-
-VisualsSection:NewToggle("Third Person", "Toggle third person view", function(state)
-    toggleThirdPerson(state)
-end)
-
-VisualsSection:NewToggle("No Recoil", "Toggle no recoil (game specific)", function(state)
-    noRecoilEnabled = state
-    if state then
-        noRecoil()
-    end
 end)
 
 VisualsSection:NewToggle("X-Ray", "Toggle X-Ray vision", function(state)
@@ -839,6 +1071,10 @@ end)
 
 VisualsSection:NewToggle("Item ESP", "Toggle item ESP", function(state)
     toggleItemESP(state)
+end)
+
+VisualsSection:NewToggle("Bullet Tracers", "Toggle bullet tracers", function(state)
+    toggleBulletTracers(state)
 end)
 
 -- Misc Tab
@@ -966,9 +1202,18 @@ MiscSection:NewSlider("No Clip Speed Value", "Adjust no clip speed", 200, 50, fu
 end)
 
 MiscSection:NewToggle("Wallwalk", "Toggle wallwalk", function(state)
-    wallwalkEnabled = state
+    toggleWallwalk(state)
+end)
+
+MiscSection:NewToggle("Invisible Tools", "Toggle invisible tools", function(state)
+    invisibleToolsEnabled = state
+    invisibleTools()
+end)
+
+MiscSection:NewToggle("Fake Character", "Toggle fake character", function(state)
+    fakeCharacterEnabled = state
     if state then
-        wallwalk()
+        fakeCharacter()
     end
 end)
 
@@ -986,7 +1231,6 @@ game:BindToClose(function()
     toggleSilentAim(false)
     toggleTriggerBot(false)
     toggleBunnyHop(false)
-    toggleThirdPerson(false)
     toggleInstantRespawn(false)
     toggleFakeLag(false)
     speedHackEnabled = false
@@ -1016,4 +1260,18 @@ game:BindToClose(function()
     noClipSpeedBoostEnabled = false
     noClipSpeedBoost()
     wallwalkEnabled = false
+    toggleWallwalk(false)
+    noSpreadEnabled = false
+    rapidFireEnabled = false
+    invisibleToolsEnabled = false
+    invisibleTools()
+    fakeCharacterEnabled = false
+    toggleBulletTracers(false)
+    autoReloadEnabled = false
+    hitboxExpanderEnabled = false
+    hitboxExpander()
 end)
+
+-- Initialize camera to default state
+Camera.CameraType = Enum.CameraType.Custom
+UserInputService.MouseBehavior = Enum.MouseBehavior.Default
