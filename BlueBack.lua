@@ -1,6 +1,6 @@
 
 local Library = loadstring(game:HttpGet("https://raw.githubusercontent.com/xHeptc/Kavo-UI-Library/main/source.lua"))()
-local Window = Library.CreateLib("BlueBack", "BlueTheme")
+local Window = Library.CreateLib("BlueBack", "DarkTheme")
 local Players = game:GetService("Players")
 local LocalPlayer = Players.LocalPlayer
 local RunService = game:GetService("RunService")
