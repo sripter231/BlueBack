@@ -5,9 +5,11 @@ local LocalPlayer = Players.LocalPlayer
 local RunService = game:GetService("RunService")
 local HttpService = game:GetService("HttpService")
 local UserInputService = game:GetService("UserInputService")
-local Camera = workspace.CurrentCamera
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local Workspace = game:GetService("Workspace")
+local Lighting = game:GetService("Lighting")
 
--- Strong Anticheat Bypass
+-- Enhanced Anticheat Bypass
 local function antiCheatBypass()
     pcall(function()
         if getgenv().ACBYPASS then return end
@@ -34,14 +36,15 @@ local function antiCheatBypass()
         end
         
         mt.__namecall = function(t, k, ...)
-            if k == "Kick" or k == "Ban" or k == "RemoteEvent" then
+            local method = tostring(k):lower()
+            if method:find("kick") or method:find("ban") or method:find("remoteevent") or method:find("report") then
                 return
             end
             return oldNamecall(t, k, ...)
         end
         
         mt.__newindex = function(t, k, v)
-            if k == "WalkSpeed" or k == "JumpPower" then
+            if k == "WalkSpeed" or k == "JumpPower" or k == "Health" then
                 return
             end
             oldNewIndex(t, k, v)
@@ -49,17 +52,92 @@ local function antiCheatBypass()
         
         setreadonly(mt, true)
         
-        spawn(function()
+        -- Spoof remote event connections
+        for _, remote in pairs(ReplicatedStorage:GetDescendants()) do
+            if remote:IsA("RemoteEvent") or remote:IsA("RemoteFunction") then
+                pcall(function()
+                    remote.OnClientEvent:Connect(function() end)
+                end)
+            end
+        end
+        
+        coroutine.wrap(function()
             while getgenv().ACBYPASS do
                 spoofProperties()
-                wait(0.5)
+                wait(0.3)
             end
-        end)
+        end)()
     end)
 end
 antiCheatBypass()
 
--- Original ESP (Smaller Health/Distance Text)
+-- Minimap Feature
+local minimapEnabled = false
+local minimapGui = nil
+local minimapSize = 200
+local minimapZoom = 50
+
+local function createMinimap()
+    minimapGui = Instance.new("ScreenGui")
+    minimapGui.Name = "MinimapGui"
+    minimapGui.Parent = game.CoreGui
+    
+    local frame = Instance.new("Frame")
+    frame.Size = UDim2.new(0, minimapSize, 0, minimapSize)
+    frame.Position = UDim2.new(0.85, 0, 0.05, 0)
+    frame.BackgroundColor3 = Color3.new(0, 0, 0)
+    frame.BackgroundTransparency = 0.5
+    frame.BorderSizePixel = 2
+    frame.Parent = minimapGui
+    
+    local function updateMinimap()
+        while minimapEnabled do
+            for _, v in pairs(frame:GetChildren()) do
+                if v:IsA("Frame") then v:Destroy() end
+            end
+            
+            local center = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+            if not center then return end
+            center = center.Position
+            
+            for _, player in pairs(Players:GetPlayers()) do
+                if player ~= LocalPlayer and player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
+                    local pos = player.Character.HumanoidRootPart.Position
+                    local relPos = (pos - center) / minimapZoom
+                    if relPos.Magnitude < 0.5 then
+                        local dot = Instance.new("Frame")
+                        dot.Size = UDim2.new(0, 5, 0, 5)
+                        dot.Position = UDim2.new(0.5 + relPos.X, 0, 0.5 + relPos.Z, 0)
+                        dot.BackgroundColor3 = Color3.new(1, 0, 0)
+                        dot.Parent = frame
+                    end
+                end
+            end
+            
+            local playerDot = Instance.new("Frame")
+            playerDot.Size = UDim2.new(0, 8, 0, 8)
+            playerDot.Position = UDim2.new(0.5, 0, 0.5, 0)
+            playerDot.BackgroundColor3 = Color3.new(0, 1, 0)
+            playerDot.Parent = frame
+            
+            wait(0.1)
+        end
+    end
+    
+    coroutine.wrap(updateMinimap)()
+end
+
+local function toggleMinimap(state)
+    minimapEnabled = state
+    if state then
+        createMinimap()
+    else
+        if minimapGui then minimapGui:Destroy() end
+        minimapGui = nil
+    end
+end
+
+-- Fixed and Optimized ESP
 local espEnabled = false
 local espTable = {}
 local function createESP(player)
@@ -83,23 +161,23 @@ local function createESP(player)
     nameLabel.Parent = billboard
 
     local healthLabel = Instance.new("TextLabel")
-    healthLabel.Size = UDim2.new(1, 0, 0.2, 0) -- Smaller size
+    healthLabel.Size = UDim2.new(1, 0, 0.2, 0)
     healthLabel.Position = UDim2.new(0, 0, 0.3, 0)
     healthLabel.BackgroundTransparency = 1
     healthLabel.Text = "Health: 100"
     healthLabel.TextColor3 = Color3.new(0, 1, 0)
     healthLabel.TextStrokeTransparency = 0
-    healthLabel.TextSize = 12 -- Fixed smaller size
+    healthLabel.TextSize = 12
     healthLabel.Parent = billboard
 
     local distanceLabel = Instance.new("TextLabel")
-    distanceLabel.Size = UDim2.new(1, 0, 0.2, 0) -- Smaller size
+    distanceLabel.Size = UDim2.new(1, 0, 0.2, 0)
     distanceLabel.Position = UDim2.new(0, 0, 0.5, 0)
     distanceLabel.BackgroundTransparency = 1
     distanceLabel.Text = "Distance: 0"
     distanceLabel.TextColor3 = Color3.new(1, 1, 0)
     distanceLabel.TextStrokeTransparency = 0
-    distanceLabel.TextSize = 12 -- Fixed smaller size
+    distanceLabel.TextSize = 12
     distanceLabel.Parent = billboard
 
     local highlight = Instance.new("Highlight")
@@ -112,28 +190,33 @@ local function createESP(player)
 end
 
 local function updateESP()
-    while espEnabled do
-        for player, data in pairs(espTable) do
-            if player.Character and player.Character:FindFirstChild("Humanoid") and player.Character:FindFirstChild("HumanoidRootPart") then
-                local hum = player.Character.Humanoid
-                local distance = (LocalPlayer.Character.HumanoidRootPart.Position - player.Character.HumanoidRootPart.Position).Magnitude
-                data.healthLabel.Text = "Health: " .. math.floor(hum.Health)
-                data.healthLabel.TextColor3 = Color3.fromHSV(hum.Health/300, 1, 1)
-                data.distanceLabel.Text = "Distance: " .. math.floor(distance)
-                data.highlight.FillColor = Color3.fromHSV(hum.Health/300, 1, 1)
-            else
-                data.billboard:Destroy()
-                data.highlight:Destroy()
-                espTable[player] = nil
+    coroutine.wrap(function()
+        while espEnabled do
+            for player, data in pairs(espTable) do
+                if player.Character and player.Character:FindFirstChild("Humanoid") and player.Character:FindFirstChild("HumanoidRootPart") then
+                    local hum = player.Character.Humanoid
+                    local root = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+                    if root then
+                        local distance = (root.Position - player.Character.HumanoidRootPart.Position).Magnitude
+                        data.healthLabel.Text = "Health: " .. math.floor(hum.Health)
+                        data.healthLabel.TextColor3 = Color3.fromHSV(hum.Health/300, 1, 1)
+                        data.distanceLabel.Text = "Distance: " .. math.floor(distance)
+                        data.highlight.FillColor = Color3.fromHSV(hum.Health/300, 1, 1)
+                    end
+                else
+                    data.billboard:Destroy()
+                    data.highlight:Destroy()
+                    espTable[player] = nil
+                end
             end
-        end
-        for _, player in pairs(Players:GetPlayers()) do
-            if not espTable[player] then
-                createESP(player)
+            for _, player in pairs(Players:GetPlayers()) do
+                if not espTable[player] then
+                    createESP(player)
+                end
             end
+            wait(0.1)
         end
-        wait(0.1)
-    end
+    end)()
 end
 
 local function toggleESP(state)
@@ -143,7 +226,7 @@ local function toggleESP(state)
             createESP(player)
         end
         Players.PlayerAdded:Connect(createESP)
-        spawn(updateESP)
+        updateESP()
     else
         for _, data in pairs(espTable) do
             data.billboard:Destroy()
@@ -169,7 +252,7 @@ local function startFly()
 
     RunService.RenderStepped:Connect(function()
         if not flying then return end
-        local cam = Camera
+        local cam = Workspace.CurrentCamera
         local moveDir = Vector3.new(0, 0, 0)
         if UserInputService:IsKeyDown(Enum.KeyCode.W) then
             moveDir = moveDir + cam.CFrame.LookVector
@@ -205,7 +288,7 @@ local function stopFly()
     end
 end
 
--- Silent Aim
+-- Fixed Silent Aim
 local silentAimEnabled = false
 local function silentAim()
     local function getClosestPlayer()
@@ -213,7 +296,7 @@ local function silentAim()
         local closestDistance = math.huge
         for _, player in pairs(Players:GetPlayers()) do
             if player ~= LocalPlayer and player.Character and player.Character:FindFirstChild("Head") then
-                local distance = (player.Character.Head.Position - Camera.CFrame.Position).Magnitude
+                local distance = (player.Character.Head.Position - Workspace.CurrentCamera.CFrame.Position).Magnitude
                 if distance < closestDistance then
                     closestDistance = distance
                     closestPlayer = player
@@ -223,17 +306,22 @@ local function silentAim()
         return closestPlayer
     end
 
-    local oldFireServer = game:GetService("ReplicatedStorage").RemoteEvent.FireServer
-    game:GetService("ReplicatedStorage").RemoteEvent.FireServer = function(self, ...)
-        if silentAimEnabled then
-            local args = {...}
-            local closestPlayer = getClosestPlayer()
-            if closestPlayer and args[1] == "Shoot" then
-                args[2] = closestPlayer.Character.Head.Position
+    local oldFireServer
+    for _, remote in pairs(ReplicatedStorage:GetDescendants()) do
+        if remote:IsA("RemoteEvent") then
+            oldFireServer = remote.FireServer
+            remote.FireServer = function(self, ...)
+                if silentAimEnabled then
+                    local args = {...}
+                    local closestPlayer = getClosestPlayer()
+                    if closestPlayer and args[1] == "Shoot" then
+                        args[2] = closestPlayer.Character.Head.Position
+                    end
+                    return oldFireServer(self, unpack(args))
+                end
+                return oldFireServer(self, ...)
             end
-            return oldFireServer(self, unpack(args))
         end
-        return oldFireServer(self, ...)
     end
 end
 
@@ -244,14 +332,14 @@ local function toggleSilentAim(state)
     end
 end
 
--- Trigger Bot
+-- Fixed Trigger Bot
 local triggerBotEnabled = false
 local function triggerBot()
     RunService.RenderStepped:Connect(function()
         if not triggerBotEnabled then return end
         local mouse = UserInputService:GetMouseLocation()
-        local ray = Camera:ScreenPointToRay(mouse.X, mouse.Y)
-        local hit = workspace:FindPartOnRay(ray)
+        local ray = Workspace.CurrentCamera:ScreenPointToRay(mouse.X, mouse.Y)
+        local hit = Workspace:FindPartOnRay(ray)
         if hit and hit.Parent and hit.Parent:FindFirstChildOfClass("Humanoid") and hit.Parent ~= LocalPlayer.Character then
             mouse1click()
         end
@@ -261,17 +349,43 @@ end
 local function toggleTriggerBot(state)
     triggerBotEnabled = state
     if state then
-        spawn(triggerBot)
+        coroutine.wrap(triggerBot)()
     end
 end
 
--- Wallbang
+-- Fixed Wallbang
 local wallbangEnabled = false
 local function wallbang()
-    -- Game-specific, no universal solution
+    local oldFireServer
+    for _, remote in pairs(ReplicatedStorage:GetDescendants()) do
+        if remote:IsA("RemoteEvent") then
+            oldFireServer = remote.FireServer
+            remote.FireServer = function(self, ...)
+                if wallbangEnabled then
+                    local args = {...}
+                    if args[1] == "Shoot" then
+                        local ray = Ray.new(Workspace.CurrentCamera.CFrame.Position, args[2] - Workspace.CurrentCamera.CFrame.Position)
+                        local hit, pos = Workspace:FindPartOnRay(ray, LocalPlayer.Character)
+                        if hit and hit.Parent:FindFirstChildOfClass("Humanoid") then
+                            args[2] = hit.Position
+                        end
+                    end
+                    return oldFireServer(self, unpack(args))
+                end
+                return oldFireServer(self, ...)
+            end
+        end
+    end
 end
 
--- Bunny Hop
+local function toggleWallbang(state)
+    wallbangEnabled = state
+    if state then
+        wallbang()
+    end
+end
+
+-- Fixed Bunny Hop
 local bunnyHopEnabled = false
 local function bunnyHop()
     RunService.Stepped:Connect(function()
@@ -287,50 +401,66 @@ end
 local function toggleBunnyHop(state)
     bunnyHopEnabled = state
     if state then
-        spawn(bunnyHop)
+        coroutine.wrap(bunnyHop)()
     end
 end
 
 -- FOV Changer
 local function setFOV(value)
-    Camera.FieldOfView = value
+    Workspace.CurrentCamera.FieldOfView = value
 end
 
--- Third Person
+-- Fixed Third Person
 local thirdPersonEnabled = false
 local function toggleThirdPerson(state)
     thirdPersonEnabled = state
     if state then
         UserInputService.MouseBehavior = Enum.MouseBehavior.LockCenter
-        Camera.CameraType = Enum.CameraType.Scriptable
+        Workspace.CurrentCamera.CameraType = Enum.CameraType.Scriptable
         RunService.RenderStepped:Connect(function()
             if thirdPersonEnabled then
                 local character = LocalPlayer.Character
                 if character and character:FindFirstChild("HumanoidRootPart") then
                     local root = character.HumanoidRootPart
-                    Camera.CFrame = CFrame.new(root.Position - root.CFrame.LookVector * 5 + Vector3.new(0, 2, 0), root.Position)
+                    Workspace.CurrentCamera.CFrame = CFrame.new(root.Position - root.CFrame.LookVector * 5 + Vector3.new(0, 2, 0), root.Position)
                 end
             end
         end)
     else
-        Camera.CameraType = Enum.CameraType.Custom
+        Workspace.CurrentCamera.CameraType = Enum.CameraType.Custom
         UserInputService.MouseBehavior = Enum.MouseBehavior.Default
     end
 end
 
--- No Recoil
+-- Fixed No Recoil
 local noRecoilEnabled = false
 local function noRecoil()
-    -- Game-specific, no universal solution
+    local oldMouseDelta = UserInputService.GetMouseDelta
+    UserInputService.GetMouseDelta = function(...)
+        if noRecoilEnabled then
+            return Vector2.new(0, 0)
+        end
+        return oldMouseDelta(...)
+    end
 end
 
--- Instant Respawn
+local function toggleNoRecoil(state)
+    noRecoilEnabled = state
+    if state then
+        noRecoil()
+    end
+end
+
+-- Fixed Instant Respawn
 local instantRespawnEnabled = false
 local function instantRespawn()
     LocalPlayer.CharacterAdded:Connect(function()
         if instantRespawnEnabled then
             wait(0.1)
-            LocalPlayer.Character.HumanoidRootPart.CFrame = workspace.SpawnLocation.CFrame
+            local spawn = Workspace:FindFirstChild("SpawnLocation") or Workspace:FindFirstChildOfClass("Part")
+            if spawn then
+                LocalPlayer.Character.HumanoidRootPart.CFrame = spawn.CFrame + Vector3.new(0, 3, 0)
+            end
         end
     end)
 end
@@ -342,14 +472,21 @@ local function toggleInstantRespawn(state)
     end
 end
 
--- Fake Lag
+-- Fixed Fake Lag
 local fakeLagEnabled = false
 local function fakeLag()
-    spawn(function()
+    coroutine.wrap(function()
         while fakeLagEnabled do
-            wait(0.1)
+            for _, remote in pairs(ReplicatedStorage:GetDescendants()) do
+                if remote:IsA("RemoteEvent") then
+                    pcall(function()
+                        remote:FireServer("FakeLag")
+                    end)
+                end
+            end
+            wait(0.2)
         end
-    end)
+    end)()
 end
 
 local function toggleFakeLag(state)
@@ -405,9 +542,9 @@ end
 -- Auto-Detect Features
 local autoDetectEnabled = false
 local function autoDetectFeatures()
-    spawn(function()
+    coroutine.wrap(function()
         while autoDetectEnabled do
-            if workspace:FindFirstChild("SpawnLocation") then
+            if Workspace:FindFirstChild("SpawnLocation") then
                 instantRespawnEnabled = true
             end
             for _, tool in pairs(LocalPlayer.Backpack:GetChildren()) do
@@ -419,84 +556,94 @@ local function autoDetectFeatures()
             end
             wait(5)
         end
-    end)
+    end)()
 end
 
--- God Mode
+-- Fixed God Mode
 local godModeEnabled = false
 local function godMode()
-    spawn(function()
+    coroutine.wrap(function()
         while godModeEnabled do
             if LocalPlayer.Character and LocalPlayer.Character:FindFirstChildOfClass("Humanoid") then
                 LocalPlayer.Character.Humanoid.Health = 100
             end
             wait(0.1)
         end
-    end)
+    end)()
 end
 
--- Kill Aura
+-- Fixed Kill Aura
 local killAuraEnabled = false
 local function killAura()
-    spawn(function()
+    coroutine.wrap(function()
         while killAuraEnabled do
             for _, player in pairs(Players:GetPlayers()) do
                 if player ~= LocalPlayer and player.Character and player.Character:FindFirstChild("Humanoid") then
                     local distance = (LocalPlayer.Character.HumanoidRootPart.Position - player.Character.HumanoidRootPart.Position).Magnitude
                     if distance <= 10 then
-                        player.Character.Humanoid.Health = 0
+                        player.Character.Humanoid:TakeDamage(100)
                     end
                 end
             end
             wait(0.1)
         end
-    end)
+    end)()
 end
 
--- X-Ray
+-- Fixed X-Ray
 local xrayEnabled = false
 local function xray()
-    for _, part in pairs(workspace:GetDescendants()) do
+    for _, part in pairs(Workspace:GetDescendants()) do
         if part:IsA("BasePart") and part.Transparency < 1 then
-            part.Transparency = xrayEnabled and 0.7 or 0
+            part.Transparency = xrayEnabled and 0.7 or part:GetAttribute("OriginalTransparency") or 0
+            if not part:GetAttribute("OriginalTransparency") then
+                part:SetAttribute("OriginalTransparency", part.Transparency)
+            end
         end
     end
 end
 
--- Fullbright
+-- Fixed Fullbright
 local fullbrightEnabled = false
 local function fullbright()
     if fullbrightEnabled then
-        game.Lighting.Brightness = 2
-        game.Lighting.FogEnd = 100000
+        Lighting.Brightness = 2
+        Lighting.FogEnd = 100000
     else
-        game.Lighting.Brightness = 1
-        game.Lighting.FogEnd = 1000
+        Lighting.Brightness = 1
+        Lighting.FogEnd = 1000
     end
 end
 
--- Player Chams
+-- Fixed Player Chams
 local chamsEnabled = false
 local function playerChams()
     for _, player in pairs(Players:GetPlayers()) do
         if player ~= LocalPlayer and player.Character then
             for _, part in pairs(player.Character:GetDescendants()) do
                 if part:IsA("BasePart") then
-                    part.Material = chamsEnabled and Enum.Material.Neon or Enum.Material.Plastic
-                    part.Color = chamsEnabled and Color3.new(1, 0, 0) or Color3.new(1, 1, 1)
+                    part.Material = chamsEnabled and Enum.Material.Neon or (part:GetAttribute("OriginalMaterial") or Enum.Material.Plastic)
+                    part.Color = chamsEnabled and Color3.new(1, 0, 0) or (part:GetAttribute("OriginalColor") or Color3.new(1, 1, 1))
+                    if not chamsEnabled then
+                        part:SetAttribute("OriginalMaterial", part.Material)
+                        part:SetAttribute("OriginalColor", part.Color)
+                    end
                 end
             end
         end
     end
 end
 
--- Auto Respawn
+-- Fixed Auto Respawn
 local autoRespawnEnabled = false
 local function autoRespawn()
     LocalPlayer.CharacterAdded:Connect(function()
         if autoRespawnEnabled then
             wait(0.1)
-            LocalPlayer.Character.HumanoidRootPart.CFrame = workspace.SpawnLocation.CFrame
+            local spawn = Workspace:FindFirstChild("SpawnLocation") or Workspace:FindFirstChildOfClass("Part")
+            if spawn then
+                LocalPlayer.Character.HumanoidRootPart.CFrame = spawn.CFrame + Vector3.new(0, 3, 0)
+            end
         end
     end)
 end
@@ -504,39 +651,39 @@ end
 -- Anti-AFK
 local antiAfkEnabled = false
 local function antiAfk()
-    spawn(function()
+    coroutine.wrap(function()
         while antiAfkEnabled do
             game:GetService("VirtualUser"):CaptureController()
             wait(60)
         end
-    end)
+    end)()
 end
 
 -- Gravity Hack
 local gravityHackEnabled = false
 local gravityValue = 50
 local function gravityHack()
-    workspace.Gravity = gravityHackEnabled and gravityValue or 196.2
+    Workspace.Gravity = gravityHackEnabled and gravityValue or 196.2
 end
 
--- No Fall Damage
+-- Fixed No Fall Damage
 local noFallDamageEnabled = false
 local function noFallDamage()
-    spawn(function()
+    coroutine.wrap(function()
         while noFallDamageEnabled do
             if LocalPlayer.Character and LocalPlayer.Character:FindFirstChildOfClass("Humanoid") then
-                LocalPlayer.Character.Humanoid:ChangeState(Enum.HumanoidStateType.GettingUp)
+                LocalPlayer.Character.Humanoid.FallDamageEnabled = false
             end
             wait(0.1)
         end
-    end)
+    end)()
 end
 
--- ESP for Items
+-- Item ESP
 local itemEspEnabled = false
 local itemEspTable = {}
 local function createItemESP(item)
-    if not item:IsA("BasePart") and not item:IsA("Tool") then return end
+    if not (item:IsA("BasePart") or item:IsA("Tool")) then return end
     
     local billboard = Instance.new("BillboardGui")
     billboard.Name = "ItemESP_" .. item.Name
@@ -559,32 +706,34 @@ local function createItemESP(item)
 end
 
 local function updateItemESP()
-    while itemEspEnabled do
-        for item, data in pairs(itemEspTable) do
-            if not item.Parent then
-                data.billboard:Destroy()
-                itemEspTable[item] = nil
+    coroutine.wrap(function()
+        while itemEspEnabled do
+            for item, data in pairs(itemEspTable) do
+                if not item.Parent then
+                    data.billboard:Destroy()
+                    itemEspTable[item] = nil
+                end
             end
-        end
-        for _, item in pairs(workspace:GetDescendants()) do
-            if (item:IsA("BasePart") or item:IsA("Tool")) and not itemEspTable[item] then
-                createItemESP(item)
+            for _, item in pairs(Workspace:GetDescendants()) do
+                if (item:IsA("BasePart") or item:IsA("Tool")) and not itemEspTable[item] then
+                    createItemESP(item)
+                end
             end
+            wait(0.5)
         end
-        wait(0.5)
-    end
+    end)()
 end
 
 local function toggleItemESP(state)
     itemEspEnabled = state
     if state then
-        for _, item in pairs(workspace:GetDescendants()) do
+        for _, item in pairs(Workspace:GetDescendants()) do
             if item:IsA("BasePart") or item:IsA("Tool") then
                 createItemESP(item)
             end
         end
-        workspace.DescendantAdded:Connect(createItemESP)
-        spawn(updateItemESP)
+        Workspace.DescendantAdded:Connect(createItemESP)
+        updateItemESP()
     else
         for _, data in pairs(itemEspTable) do
             data.billboard:Destroy()
@@ -599,8 +748,8 @@ local function clickTp()
     UserInputService.InputBegan:Connect(function(input)
         if clickTpEnabled and input.UserInputType == Enum.UserInputType.MouseButton1 then
             local mouse = UserInputService:GetMouseLocation()
-            local ray = Camera:ScreenPointToRay(mouse.X, mouse.Y)
-            local hit = workspace:FindPartOnRay(ray)
+            local ray = Workspace.CurrentCamera:ScreenPointToRay(mouse.X, mouse.Y)
+            local hit = Workspace:FindPartOnRay(ray)
             if hit and LocalPlayer.Character and LocalPlayer.Character.HumanoidRootPart then
                 LocalPlayer.Character.HumanoidRootPart.CFrame = CFrame.new(hit.Position + Vector3.new(0, 3, 0))
             end
@@ -620,12 +769,12 @@ end
 -- Auto Clicker
 local autoClickerEnabled = false
 local function autoClicker()
-    spawn(function()
+    coroutine.wrap(function()
         while autoClickerEnabled do
             mouse1click()
             wait(0.05)
         end
-    end)
+    end)()
 end
 
 -- Player Tracker
@@ -639,7 +788,7 @@ local function trackPlayer(playerName)
         end
     end
     if trackedPlayer and trackerEnabled then
-        spawn(function()
+        coroutine.wrap(function()
             while trackerEnabled and trackedPlayer and trackedPlayer.Character and trackedPlayer.Character:FindFirstChild("HumanoidRootPart") do
                 local billboard = Instance.new("BillboardGui")
                 billboard.Name = "Tracker_" .. trackedPlayer.Name
@@ -660,7 +809,7 @@ local function trackPlayer(playerName)
                 wait(1)
                 billboard:Destroy()
             end
-        end)
+        end)()
     end
 end
 
@@ -675,14 +824,14 @@ local function noClipSpeedBoost()
     end
 end
 
--- Wallwalk
+-- Fixed Wallwalk
 local wallwalkEnabled = false
 local function wallwalk()
     RunService.Stepped:Connect(function()
         if wallwalkEnabled and LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart") then
             local root = LocalPlayer.Character.HumanoidRootPart
             local ray = Ray.new(root.Position, root.CFrame.LookVector * 5)
-            local hit, pos, normal = workspace:FindPartOnRay(ray, LocalPlayer.Character)
+            local hit, pos, normal = Workspace:FindPartOnRay(ray, LocalPlayer.Character)
             if hit then
                 root.CFrame = CFrame.new(root.Position, root.Position + normal) * CFrame.Angles(math.rad(-90), 0, 0)
             end
@@ -697,17 +846,282 @@ local function loadF3X()
     end)
 end
 
--- Feature Search
+-- New Feature: Aimbot
+local aimbotEnabled = false
+local aimbotFOV = 100
+local aimbotSmoothing = 0.1
+local function aimbot()
+    RunService.RenderStepped:Connect(function()
+        if not aimbotEnabled then return end
+        local closestPlayer = nil
+        local closestDistance = aimbotFOV
+        local mouse = UserInputService:GetMouseLocation()
+        
+        for _, player in pairs(Players:GetPlayers()) do
+            if player ~= LocalPlayer and player.Character and player.Character:FindFirstChild("Head") then
+                local head = player.Character.Head
+                local screenPos, onScreen = Workspace.CurrentCamera:WorldToScreenPoint(head.Position)
+                if onScreen then
+                    local distance = (Vector2.new(screenPos.X, screenPos.Y) - Vector2.new(mouse.X, mouse.Y)).Magnitude
+                    if distance < closestDistance then
+                        closestDistance = distance
+                        closestPlayer = player
+                    end
+                end
+            end
+        end
+        
+        if closestPlayer then
+            local headPos = closestPlayer.Character.Head.Position
+            local screenPos = Workspace.CurrentCamera:WorldToScreenPoint(headPos)
+            local target = Vector2.new(screenPos.X, screenPos.Y)
+            local current = Vector2.new(mouse.X, mouse.Y)
+            local newPos = current + (target - current) * aimbotSmoothing
+            mousemoverel((newPos - current).X, (newPos - current).Y)
+        end
+    end)
+end
+
+local function toggleAimbot(state)
+    aimbotEnabled = state
+    if state then
+        coroutine.wrap(aimbot)()
+    end
+end
+
+-- New Feature: Auto Farm
+local autoFarmEnabled = false
+local function autoFarm()
+    coroutine.wrap(function()
+        while autoFarmEnabled do
+            for _, item in pairs(Workspace:GetDescendants()) do
+                if item:IsA("Tool") or item.Name:lower():find("coin") or item.Name:lower():find("gem") then
+                    if LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart") then
+                        LocalPlayer.Character.HumanoidRootPart.CFrame = CFrame.new(item.Position)
+                        wait(0.1)
+                        fireclickdetector(item:FindFirstChildOfClass("ClickDetector"))
+                    end
+                end
+            end
+            wait(1)
+        end
+    end)()
+end
+
+local function toggleAutoFarm(state)
+    autoFarmEnabled = state
+    if state then
+        autoFarm()
+    end
+end
+
+-- New Feature: Player Teleport List
+local function createTeleportDropdown()
+    local players = {}
+    for _, player in pairs(Players:GetPlayers()) do
+        table.insert(players, player.Name)
+    end
+    return players
+end
+
+-- New Feature: ESP Tracers
+local tracersEnabled = false
+local tracersTable = {}
+local function createTracer(player)
+    if player == LocalPlayer or not player.Character or not player.Character:FindFirstChild("HumanoidRootPart") then return end
+    
+    local line = Drawing.new("Line")
+    line.Visible = true
+    line.Color = Color3.new(1, 0, 0)
+    line.Thickness = 2
+    line.Transparency = 1
+    
+    tracersTable[player] = {line = line}
+end
+
+local function updateTracers()
+    coroutine.wrap(function()
+        while tracersEnabled do
+            for player, data in pairs(tracersTable) do
+                if player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
+                    local root = player.Character.HumanoidRootPart
+                    local screenPos, onScreen = Workspace.CurrentCamera:WorldToScreenPoint(root.Position)
+                    if onScreen then
+                        data.line.From = Vector2.new(UserInputService:GetMouseLocation().X, UserInputService:GetMouseLocation().Y)
+                        data.line.To = Vector2.new(screenPos.X, screenPos.Y)
+                        data.line.Visible = true
+                    else
+                        data.line.Visible = false
+                    end
+                else
+                    data.line:Remove()
+                    tracersTable[player] = nil
+                end
+            end
+            for _, player in pairs(Players:GetPlayers()) do
+                if not tracersTable[player] then
+                    createTracer(player)
+                end
+            end
+            wait(0.03)
+        end
+    end)()
+end
+
+local function toggleTracers(state)
+    tracersEnabled = state
+    if state then
+        for _, player in pairs(Players:GetPlayers()) do
+            createTracer(player)
+        end
+        Players.PlayerAdded:Connect(createTracer)
+        updateTracers()
+    else
+        for _, data in pairs(tracersTable) do
+            data.line:Remove()
+        end
+        tracersTable = {}
+    end
+end
+
+-- New Feature: Hitbox Expander
+local hitboxExpanderEnabled = false
+local hitboxSize = 10
+local function hitboxExpander()
+    coroutine.wrap(function()
+        while hitboxExpanderEnabled do
+            for _, player in pairs(Players:GetPlayers()) do
+                if player ~= LocalPlayer and player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
+                    local root = player.Character.HumanoidRootPart
+                    root.Size = hitboxExpanderEnabled and Vector3.new(hitboxSize, hitboxSize, hitboxSize) or Vector3.new(2, 2, 1)
+                    root.Transparency = hitboxExpanderEnabled and 0.7 or 0
+                end
+            end
+            wait(0.1)
+        end
+    end)()
+end
+
+local function toggleHitboxExpander(state)
+    hitboxExpanderEnabled = state
+    if state then
+        hitboxExpander()
+    end
+end
+
+-- New Feature: Chat Spoofer
+local chatSpooferEnabled = false
+local function chatSpoofer(message)
+    if chatSpooferEnabled then
+        local chatRemote = ReplicatedStorage:FindFirstChild("DefaultChatSystemChatEvents") and ReplicatedStorage.DefaultChatSystemChatEvents:FindFirstChild("SayMessageRequest")
+        if chatRemote then
+            chatRemote:FireServer(message, "All")
+        end
+    end
+end
+
+local function toggleChatSpoofer(state)
+    chatSpooferEnabled = state
+end
+
+-- New Feature: Anti-Ban
+local antiBanEnabled = false
+local function antiBan()
+    coroutine.wrap(function()
+        while antiBanEnabled do
+            for _, remote in pairs(ReplicatedStorage:GetDescendants()) do
+                if remote:IsA("RemoteEvent") and remote.Name:lower():find("ban") or remote.Name:lower():find("kick") then
+                    remote.OnClientEvent:Connect(function() end)
+                end
+            end
+            wait(1)
+        end
+    end)()
+end
+
+local function toggleAntiBan(state)
+    antiBanEnabled = state
+    if state then
+        antiBan()
+    end
+end
+
+-- New Feature: Speed Boost
+local speedBoostEnabled = false
+local speedBoostMultiplier = 2
+local function speedBoost()
+    if speedBoostEnabled and LocalPlayer.Character and LocalPlayer.Character:FindFirstChildOfClass("Humanoid") then
+        LocalPlayer.Character.Humanoid.WalkSpeed = speedValue * speedBoostMultiplier
+    end
+end
+
+local function toggleSpeedBoost(state)
+    speedBoostEnabled = state
+    speedBoost()
+end
+
+-- New Feature: Invisible Mode
+local invisibleEnabled = false
+local function invisible()
+    if invisibleEnabled and LocalPlayer.Character then
+        for _, part in pairs(LocalPlayer.Character:GetDescendants()) do
+            if part:IsA("BasePart") then
+                part.Transparency = 1
+            end
+        end
+        LocalPlayer.Character.HumanoidRootPart.Transparency = 1
+    else
+        for _, part in pairs(LocalPlayer.Character:GetDescendants()) do
+            if part:IsA("BasePart") then
+                part.Transparency = part:GetAttribute("OriginalTransparency") or 0
+            end
+        end
+        LocalPlayer.Character.HumanoidRootPart.Transparency = 0
+    end
+end
+
+local function toggleInvisible(state)
+    invisibleEnabled = state
+    invisible()
+end
+
+-- New Feature: Auto Reload
+local autoReloadEnabled = false
+local function autoReload()
+    coroutine.wrap(function()
+        while autoReloadEnabled do
+            if LocalPlayer.Character and LocalPlayer.Character:FindFirstChildOfClass("Tool") then
+                local tool = LocalPlayer.Character:FindFirstChildOfClass("Tool")
+                if tool:FindFirstChild("Ammo") and tool.Ammo.Value <= 0 then
+                    local reloadRemote = tool:FindFirstChild("Reload")
+                    if reloadRemote then
+                        reloadRemote:FireServer()
+                    end
+                end
+            end
+            wait(0.5)
+        end
+    end)()
+end
+
+local function toggleAutoReload(state)
+    autoReloadEnabled = state
+    if state then
+        autoReload()
+    end
+end
+
+-- Feature List
 local featureList = {
     {name = "Fly", toggle = function(state) flying = state; if state then startFly() else stopFly() end end},
     {name = "ESP", toggle = toggleESP},
     {name = "Silent Aim", toggle = toggleSilentAim},
     {name = "Trigger Bot", toggle = toggleTriggerBot},
-    {name = "Wallbang", toggle = function(state) wallbangEnabled = state; if state then wallbang() end end},
+    {name = "Wallbang", toggle = toggleWallbang},
     {name = "Bunny Hop", toggle = toggleBunnyHop},
     {name = "Kill Aura", toggle = function(state) killAuraEnabled = state; if state then killAura() end end},
     {name = "Third Person", toggle = toggleThirdPerson},
-    {name = "No Recoil", toggle = function(state) noRecoilEnabled = state; if state then noRecoil() end end},
+    {name = "No Recoil", toggle = toggleNoRecoil},
     {name = "Instant Respawn", toggle = toggleInstantRespawn},
     {name = "Fake Lag", toggle = toggleFakeLag},
     {name = "Speed Hack", toggle = function(state) speedHackEnabled = state; speedHack() end},
@@ -727,7 +1141,17 @@ local featureList = {
     {name = "Super Jump", toggle = function(state) superJumpEnabled = state; superJump() end},
     {name = "Auto Clicker", toggle = function(state) autoClickerEnabled = state; if state then autoClicker() end end},
     {name = "No Clip Speed Boost", toggle = function(state) noClipSpeedBoostEnabled = state; noClipSpeedBoost() end},
-    {name = "Wallwalk", toggle = function(state) wallwalkEnabled = state; if state then wallwalk() end end}
+    {name = "Wallwalk", toggle = function(state) wallwalkEnabled = state; if state then wallwalk() end end},
+    {name = "Minimap", toggle = toggleMinimap},
+    {name = "Aimbot", toggle = toggleAimbot},
+    {name = "Auto Farm", toggle = toggleAutoFarm},
+    {name = "ESP Tracers", toggle = toggleTracers},
+    {name = "Hitbox Expander", toggle = toggleHitboxExpander},
+    {name = "Chat Spoofer", toggle = toggleChatSpoofer},
+    {name = "Anti-Ban", toggle = toggleAntiBan},
+    {name = "Speed Boost", toggle = toggleSpeedBoost},
+    {name = "Invisible Mode", toggle = toggleInvisible},
+    {name = "Auto Reload", toggle = toggleAutoReload}
 }
 
 -- UI Setup
@@ -744,10 +1168,10 @@ SearchSection:NewTextBox("Search Features", "Type to filter features", function(
     end
 end)
 
-local MainTab = Window:NewTab("Main")
-local MainSection = MainTab:NewSection("Core Features")
+local MovementTab = Window:NewTab("Movement")
+local MovementSection = MovementTab:NewSection("Movement Features")
 
-MainSection:NewToggle("Fly", "Toggle flying", function(state)
+MovementSection:NewToggle("Fly", "Toggle flying", function(state)
     flying = state
     if state then
         startFly()
@@ -756,23 +1180,99 @@ MainSection:NewToggle("Fly", "Toggle flying", function(state)
     end
 end)
 
-MainSection:NewSlider("Fly Speed", "Adjust fly speed", 100, 10, function(value)
+MovementSection:NewSlider("Fly Speed", "Adjust fly speed", 100, 10, function(value)
     flySpeed = value
 end)
 
-MainSection:NewToggle("ESP", "Toggle original ESP", function(state)
-    toggleESP(state)
+MovementSection:NewToggle("Speed Hack", "Toggle speed hack", function(state)
+    speedHackEnabled = state
+    speedHack()
 end)
 
-MainSection:NewButton("Infinite Yield", "Load Infinite Yield admin script", function()
-    loadstring(game:HttpGet("https://raw.githubusercontent.com/EdgeIY/infiniteyield/master/source"))()
+MovementSection:NewSlider("Speed Value", "Adjust speed", 100, 16, function(value)
+    speedValue = value
+    speedHack()
 end)
 
-MainSection:NewButton("Load F3X", "Load F3X Building Tools", function()
-    loadF3X()
+MovementSection:NewToggle("Speed Boost", "Toggle temporary speed boost", function(state)
+    toggleSpeedBoost(state)
 end)
 
--- Combat Tab
+MovementSection:NewSlider("Speed Boost Multiplier", "Adjust boost multiplier", 5, 1, function(value)
+    speedBoostMultiplier = value
+    speedBoost()
+end)
+
+MovementSection:NewToggle("Noclip", "Toggle noclip", function(state)
+    noclipEnabled = state
+    if state then
+        noclip()
+    end
+end)
+
+MovementSection:NewToggle("No Clip Speed Boost", "Toggle no clip speed boost", function(state)
+    noClipSpeedBoostEnabled = state
+    noClipSpeedBoost()
+end)
+
+MovementSection:NewSlider("No Clip Speed Value", "Adjust no clip speed", 200, 50, function(value)
+    noClipSpeedValue = value
+    noClipSpeedBoost()
+end)
+
+MovementSection:NewToggle("Infinite Jump", "Toggle infinite jump", function(state)
+    infJumpEnabled = state
+    if state then
+        infiniteJump()
+    end
+end)
+
+MovementSection:NewToggle("Super Jump", "Toggle super jump", function(state)
+    superJumpEnabled = state
+    superJump()
+end)
+
+MovementSection:NewSlider("Super Jump Value", "Adjust jump power", 200, 50, function(value)
+    superJumpValue = value
+    superJump()
+end)
+
+MovementSection:NewToggle("Wallwalk", "Toggle wallwalk", function(state)
+    wallwalkEnabled = state
+    if state then
+        wallwalk()
+    end
+end)
+
+MovementSection:NewToggle("Bunny Hop", "Toggle bunny hop", function(state)
+    toggleBunnyHop(state)
+end)
+
+MovementSection:NewToggle("Gravity Hack", "Toggle gravity hack", function(state)
+    gravityHackEnabled = state
+    gravityHack()
+end)
+
+MovementSection:NewSlider("Gravity Value", "Adjust gravity", 100, 0, function(value)
+    gravityValue = value
+    gravityHack()
+end)
+
+MovementSection:NewToggle("Click TP", "Toggle click teleport", function(state)
+    clickTpEnabled = state
+    if state then
+        clickTp()
+    end
+end)
+
+MovementSection:NewTextBox("Teleport to Player", "Enter player name", function(text)
+    teleportToPlayer(text)
+end)
+
+MovementSection:NewDropdown("Teleport to Player", "Select player to teleport", createTeleportDropdown(), function(playerName)
+    teleportToPlayer(playerName)
+end)
+
 local CombatTab = Window:NewTab("Combat")
 local CombatSection = CombatTab:NewSection("Combat Features")
 
@@ -780,19 +1280,28 @@ CombatSection:NewToggle("Silent Aim", "Toggle silent aim", function(state)
     toggleSilentAim(state)
 end)
 
+CombatSection:NewToggle("Aimbot", "Toggle aimbot", function(state)
+    toggleAimbot(state)
+end)
+
+CombatSection:NewSlider("Aimbot FOV", "Adjust aimbot FOV", 200, 10, function(value)
+    aimbotFOV = value
+end)
+
+CombatSection:NewSlider("Aimbot Smoothing", "Adjust aimbot smoothing", 1, 0.1, function(value)
+    aimbotSmoothing = value
+end)
+
 CombatSection:NewToggle("Trigger Bot", "Toggle trigger bot", function(state)
     toggleTriggerBot(state)
 end)
 
-CombatSection:NewToggle("Wallbang", "Toggle wallbang (game specific)", function(state)
-    wallbangEnabled = state
-    if state then
-        wallbang()
-    end
+CombatSection:NewToggle("Wallbang", "Toggle wallbang", function(state)
+    toggleWallbang(state)
 end)
 
-CombatSection:NewToggle("Bunny Hop", "Toggle bunny hop", function(state)
-    toggleBunnyHop(state)
+CombatSection:NewToggle("No Recoil", "Toggle no recoil", function(state)
+    toggleNoRecoil(state)
 end)
 
 CombatSection:NewToggle("Kill Aura", "Toggle kill aura", function(state)
@@ -802,23 +1311,53 @@ CombatSection:NewToggle("Kill Aura", "Toggle kill aura", function(state)
     end
 end)
 
--- Visuals Tab
+CombatSection:NewToggle("Hitbox Expander", "Toggle hitbox expander", function(state)
+    toggleHitboxExpander(state)
+end)
+
+CombatSection:NewSlider("Hitbox Size", "Adjust hitbox size", 20, 5, function(value)
+    hitboxSize = value
+    hitboxExpander()
+end)
+
+CombatSection:NewToggle("Auto Reload", "Toggle auto reload", function(state)
+    toggleAutoReload(state)
+end)
+
 local VisualsTab = Window:NewTab("Visuals")
 local VisualsSection = VisualsTab:NewSection("Visual Features")
 
-VisualsSection:NewSlider("FOV", "Adjust field of view", 120, 70, function(value)
-    setFOV(value)
+VisualsSection:NewToggle("ESP", "Toggle ESP", function(state)
+    toggleESP(state)
 end)
 
-VisualsSection:NewToggle("Third Person", "Toggle third person view", function(state)
-    toggleThirdPerson(state)
+VisualsSection:NewToggle("ESP Tracers", "Toggle ESP tracers", function(state)
+    toggleTracers(state)
 end)
 
-VisualsSection:NewToggle("No Recoil", "Toggle no recoil (game specific)", function(state)
-    noRecoilEnabled = state
-    if state then
-        noRecoil()
+VisualsSection:NewToggle("Player Chams", "Toggle player chams", function(state)
+    chamsEnabled = state
+    playerChams()
+end)
+
+VisualsSection:NewToggle("Item ESP", "Toggle item ESP", function(state)
+    toggleItemESP(state)
+end)
+
+VisualsSection:NewToggle("Minimap", "Toggle minimap", function(state)
+    toggleMinimap(state)
+end)
+
+VisualsSection:NewSlider("Minimap Size", "Adjust minimap size", 300, 100, function(value)
+    minimapSize = value
+    if minimapEnabled then
+        toggleMinimap(false)
+        toggleMinimap(true)
     end
+end)
+
+VisualsSection:NewSlider("Minimap Zoom", "Adjust minimap zoom", 100, 10, function(value)
+    minimapZoom = value
 end)
 
 VisualsSection:NewToggle("X-Ray", "Toggle X-Ray vision", function(state)
@@ -831,144 +1370,94 @@ VisualsSection:NewToggle("Fullbright", "Toggle fullbright", function(state)
     fullbright()
 end)
 
-VisualsSection:NewToggle("Player Chams", "Toggle player chams", function(state)
-    chamsEnabled = state
-    playerChams()
+VisualsSection:NewToggle("Third Person", "Toggle third person view", function(state)
+    toggleThirdPerson(state)
 end)
 
-VisualsSection:NewToggle("Item ESP", "Toggle item ESP", function(state)
-    toggleItemESP(state)
+VisualsSection:NewSlider("FOV", "Adjust field of view", 120, 70, function(value)
+    setFOV(value)
 end)
 
--- Misc Tab
-local MiscTab = Window:NewTab("Misc")
-local MiscSection = MiscTab:NewSection("Miscellaneous Features")
+local UtilityTab = Window:NewTab("Utility")
+local UtilitySection = UtilityTab:NewSection("Utility Features")
 
-MiscSection:NewToggle("Instant Respawn", "Toggle instant respawn", function(state)
-    toggleInstantRespawn(state)
-end)
-
-MiscSection:NewToggle("Fake Lag", "Toggle fake lag", function(state)
-    toggleFakeLag(state)
-end)
-
-MiscSection:NewToggle("Speed Hack", "Toggle speed hack", function(state)
-    speedHackEnabled = state
-    speedHack()
-end)
-
-MiscSection:NewSlider("Speed Value", "Adjust speed", 100, 16, function(value)
-    speedValue = value
-    speedHack()
-end)
-
-MiscSection:NewToggle("Noclip", "Toggle noclip", function(state)
-    noclipEnabled = state
-    if state then
-        noclip()
-    end
-end)
-
-MiscSection:NewToggle("Infinite Jump", "Toggle infinite jump", function(state)
-    infJumpEnabled = state
-    if state then
-        infiniteJump()
-    end
-end)
-
-MiscSection:NewTextBox("Teleport to Player", "Enter player name", function(text)
-    teleportToPlayer(text)
-end)
-
-MiscSection:NewToggle("Auto-Detect Features", "Toggle auto-detection", function(state)
-    autoDetectEnabled = state
-    if state then
-        autoDetectFeatures()
-    end
-end)
-
-MiscSection:NewToggle("God Mode", "Toggle god mode", function(state)
+UtilitySection:NewToggle("God Mode", "Toggle god mode", function(state)
     godModeEnabled = state
     if state then
         godMode()
     end
 end)
 
-MiscSection:NewToggle("Auto Respawn", "Toggle auto respawn", function(state)
-    autoRespawnEnabled = state
-    if state then
-        autoRespawn()
-    end
+UtilitySection:NewToggle("Invisible Mode", "Toggle invisible mode", function(state)
+    toggleInvisible(state)
 end)
 
-MiscSection:NewToggle("Anti-AFK", "Toggle anti-AFK", function(state)
-    antiAfkEnabled = state
-    if state then
-        antiAfk()
-    end
+UtilitySection:NewToggle("Anti-Ban", "Toggle anti-ban", function(state)
+    toggleAntiBan(state)
 end)
 
-MiscSection:NewToggle("Gravity Hack", "Toggle gravity hack", function(state)
-    gravityHackEnabled = state
-    gravityHack()
+UtilitySection:NewToggle("Auto Farm", "Toggle auto farm", function(state)
+    toggleAutoFarm(state)
 end)
 
-MiscSection:NewSlider("Gravity Value", "Adjust gravity", 100, 0, function(value)
-    gravityValue = value
-    gravityHack()
-end)
-
-MiscSection:NewToggle("No Fall Damage", "Toggle no fall damage", function(state)
-    noFallDamageEnabled = state
-    if state then
-        noFallDamage()
-    end
-end)
-
-MiscSection:NewToggle("Click TP", "Toggle click teleport", function(state)
-    clickTpEnabled = state
-    if state then
-        clickTp()
-    end
-end)
-
-MiscSection:NewToggle("Super Jump", "Toggle super jump", function(state)
-    superJumpEnabled = state
-    superJump()
-end)
-
-MiscSection:NewSlider("Super Jump Value", "Adjust jump power", 200, 50, function(value)
-    superJumpValue = value
-    superJump()
-end)
-
-MiscSection:NewToggle("Auto Clicker", "Toggle auto clicker", function(state)
+UtilitySection:NewToggle("Auto Clicker", "Toggle auto clicker", function(state)
     autoClickerEnabled = state
     if state then
         autoClicker()
     end
 end)
 
-MiscSection:NewTextBox("Player Tracker", "Enter player name to track", function(text)
+UtilitySection:NewToggle("Auto Respawn", "Toggle auto respawn", function(state)
+    autoRespawnEnabled = state
+    if state then
+        autoRespawn()
+    end
+end)
+
+UtilitySection:NewToggle("Instant Respawn", "Toggle instant respawn", function(state)
+    toggleInstantRespawn(state)
+end)
+
+UtilitySection:NewToggle("No Fall Damage", "Toggle no fall damage", function(state)
+    noFallDamageEnabled = state
+    if state then
+        noFallDamage()
+    end
+end)
+
+UtilitySection:NewToggle("Anti-AFK", "Toggle anti-AFK", function(state)
+    antiAfkEnabled = state
+    if state then
+        antiAfk()
+    end
+end)
+
+UtilitySection:NewToggle("Auto-Detect Features", "Toggle auto-detection", function(state)
+    autoDetectEnabled = state
+    if state then
+        autoDetectFeatures()
+    end
+end)
+
+UtilitySection:NewToggle("Chat Spoofer", "Toggle chat spoofer", function(state)
+    toggleChatSpoofer(state)
+end)
+
+UtilitySection:NewTextBox("Spoof Chat Message", "Enter message to spoof", function(text)
+    chatSpoofer(text)
+end)
+
+UtilitySection:NewTextBox("Player Tracker", "Enter player name to track", function(text)
     trackerEnabled = true
     trackPlayer(text)
 end)
 
-MiscSection:NewToggle("No Clip Speed Boost", "Toggle no clip speed boost", function(state)
-    noClipSpeedBoostEnabled = state
-    noClipSpeedBoost()
+UtilitySection:NewButton("Infinite Yield", "Load Infinite Yield admin script", function()
+    loadstring(game:HttpGet("https://raw.githubusercontent.com/EdgeIY/infiniteyield/master/source"))()
 end)
 
-MiscSection:NewSlider("No Clip Speed Value", "Adjust no clip speed", 200, 50, function(value)
-    noClipSpeedValue = value
-    noClipSpeedBoost()
-end)
-
-MiscSection:NewToggle("Wallwalk", "Toggle wallwalk", function(state)
-    wallwalkEnabled = state
-    if state then
-        wallwalk()
-    end
+UtilitySection:NewButton("Load F3X", "Load F3X Building Tools", function()
+    loadF3X()
 end)
 
 -- Credits Tab
@@ -1015,4 +1504,14 @@ game:BindToClose(function()
     noClipSpeedBoostEnabled = false
     noClipSpeedBoost()
     wallwalkEnabled = false
+    toggleMinimap(false)
+    toggleAimbot(false)
+    toggleAutoFarm(false)
+    toggleTracers(false)
+    toggleHitboxExpander(false)
+    toggleChatSpoofer(false)
+    toggleAntiBan(false)
+    toggleSpeedBoost(false)
+    toggleInvisible(false)
+    toggleAutoReload(false)
 end)
